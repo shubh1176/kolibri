@@ -48,7 +48,7 @@ from rest_framework import viewsets
 from rest_framework.mixins import CreateModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-
+from rest_framework import serializers
 from .constants import collection_kinds
 from .constants import role_kinds
 from .models import Classroom
@@ -430,10 +430,44 @@ class FacilityUserViewSet(ValuesViewset):
             update_session_auth_hash(self.request, instance)
 
 
+class UsernameAvailableSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    facility_id = serializers.UUIDField()
+
+    def validate_username(self, value):
+        # Sanitize the username here if needed
+        # For example, to remove NULL characters
+        sanitized_value = value.replace('\x00', '')
+        return sanitized_value
+
+    def validate(self, data):
+        username = data.get('username')
+        facility_id = data.get('facility_id')
+
+        if not username or not facility_id:
+            raise serializers.ValidationError("Must specify username and facility")
+
+        # Check if the facility exists
+        try:
+            facility = Facility.objects.get(id=facility_id)
+        except Facility.DoesNotExist:
+            raise serializers.ValidationError("Facility not found")
+
+        # Check if the username already exists for the given facility
+        if FacilityUser.objects.filter(username__iexact=username, facility=facility).exists():
+            raise serializers.ValidationError({"username": "Username already exists."})
+
+        return data
+
+
 class UsernameAvailableView(views.APIView):
     def post(self, request):
-        username = request.data.get("username")
-        facility_id = request.data.get("facility")
+        serializer = UsernameAvailableSerializer(data=request.data)
+
+        if serializer.is_valid():
+            username = serializer.validated_data.get('username')
+            facility_id = serializer.validated_data.get('facility_id')
+
 
         if not username or not facility_id:
             return Response(

@@ -254,6 +254,8 @@
     position: relative;
     z-index: 2; // material spec - card (resting)
     margin: $page-margin auto;
+    width: 100%; 
+    height: 100%;
   }
 
   .loading {
